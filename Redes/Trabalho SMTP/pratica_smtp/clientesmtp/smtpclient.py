@@ -5,6 +5,7 @@ from base64 import b64encode
 TEXTO = "Mensagem mais light\r\n"
 ENDMSG = "\r\n.\r\n"
 MAILSERVER = ("smtp.gmail.com", 587)
+TARGET_EMAIL = ""
 
 
 def response(socket, mensagem):
@@ -77,7 +78,7 @@ if __name__ == "__main__":
     s_clientSocket, user = autenticar(clientSocket, MAILSERVER[0])
 
 #Envio de Email
-    send_email(s_clientSocket, user, "jerrydesousa172@gmail.com", TEXTO)
+    send_email(s_clientSocket, user, TARGET_EMAIL, TEXTO)
 
 # Send QUIT command and get server response.
     send_command(s_clientSocket, "QUIT", "Fim de conexao....: ") 
