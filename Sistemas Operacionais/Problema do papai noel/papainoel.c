@@ -48,32 +48,32 @@ void pedirAjuda(int id, int elfo_c){
     sleep(500);
 }
 
-void* papaiNoelThread(void *arg){
-    while (true){
+void* papaiNoelThread(void *arg){                               /*dados do papai noel*/
+    while (true){                                               /*repita para sempre*/
         int *threadId = (int *) arg;
 
-        wait(&papaiNoelSem, "Papai noel", "Papai Noel SEM");
-        wait(&multex, "Papai Noel", "Multex");
-        if (renas >= 9){
-            prepararTreno(*threadId);
+        wait(&papaiNoelSem, "Papai noel", "Papai Noel SEM");    /*ele espera até que um elfo ou rena o sinalize)*/
+        wait(&multex, "Papai Noel", "Multex");                  /*entra na região na crítica*/
+        if (renas >= 9){                                        /*se houver nove renas esperando*/
+            prepararTreno(*threadId);                           /*papai noel prepara o trenó*/
 
             /* No codigo do livro, o signal recebe 9 como
              * parametro, nao sei pq.
              * Vou deixar na funcao para fins futuros
              * */
-            signal(&renaSem, 9, "Papai Noel", "Rena SEM"); 
-            renas -= 9;
-        }else if (elfos == 3) ajudarElfos(*threadId), signal(&elfoTex, 1, "Papai Noel", "Elfo TEX"), elfos -=3 ;
-        signal(&multex, 1, "Papai Noel", "Multex");
+            signal(&renaSem, 9, "Papai Noel", "Rena SEM");      /*sinaliza o semáforo das renas nove vezes*/ 
+            renas -= 9;                                         /*as 9 renas são invocadas*/
+        }else if (elfos == 3) ajudarElfos(*threadId), signal(&elfoTex, 1, "Papai Noel", "Elfo TEX"), elfos -=3;     /*se houver 3 elfos esperando, invoca papai noel para ajudar*/
+        signal(&multex, 1, "Papai Noel", "Multex");             /*sinaliza que os 3 elfos foi ajudados e pode entrar mais*/
     }
 }
 
-void* renaThread(void *arg){
-    while (true){
+void* renaThread(void *arg){                                    /*dados das renas*/
+    while (true){                                               /*repita para sempre*/
         int *threadId = (int *) arg;
-        wait(&multex, "Rena", "Multex");
-        renas++;
-        if (renas == 9) signal(&papaiNoelSem, 1, "Rena", "Papai Noel SEM");
+        wait(&multex, "Rena", "Multex");                        /*elas esperam até que o papai noel as sinalize para se engatilharem e após entra na região crítica*/
+        renas++;                                                /*incrementam o contador de renas no buffer*/
+        if (renas == 9) signal(&papaiNoelSem, 1, "Rena", "Papai Noel SEM");     /*se a 9º rena estiver pronta, ela sinaliza o papai noel e depois se junta aos outros que esperam*/
         signal(&multex, 1, "Rena", "Multe");
 
         wait(&renaSem, "Rena", "Rena SEM");
