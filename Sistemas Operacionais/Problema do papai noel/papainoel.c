@@ -1,116 +1,134 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <pthread.h>
 #include <semaphore.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <syscall.h>
 
 #define true 1
 #define false 0
 
 typedef sem_t sem;
 
-int elfos = 0;
+int elfos = 0;                  /* Numero de itens no Buffer*/
 int renas = 0;
 
 sem papaiNoelSem;
-sem renaSem;
+
+sem renaSem;                    /* Semaforos reservados para a relacao papai noel e rena/elfo*/
+sem elfoSem;
 
 sem elfoTex;
 sem multex;
 
 
-int wait(sem *semaforo, char alguem[], char onde[]){
-    printf("%s quer fazer ateracao em %s\n", alguem, onde);
+// Renomeação das funçoes de controle de semaforo de "Semaphore"
+int wait(sem *semaforo, char alguem[], char onde[]){ 
+    //printf("%s quer fazer ateracao em %s\n", alguem, onde);
     return sem_wait(semaforo);
 }
-int signal(sem *semaforo, int parametro, char alguem[], char onde[]){
-    printf("%s liberou o caminho em %s\n", alguem, onde);
-    for (int i = 0; i < parametro; i++) sem_post(semaforo);
+int signal(sem *semaforo, int vezes, char alguem[], char onde[]){
+    //printf("%s liberou o caminho em %s\n", alguem, onde);
+    for (int i = 0; i < vezes; i++) sem_post(semaforo);
     return 0; 
 }
 
+// Funcoes de execução para fins de LOG (estas levam um segundo para serem executadas)
 void prepararTreno(int id){
     printf("[THREAD Papai Noel %d] Preparando treno.....\n", id);
-    sleep(500);
+    sleep(1);
 }
 void ajudarElfos(int id){
     printf("[THREAD Papai Noel %d] Ajudando elfos.....\n", id);
-    sleep(500);
+    sleep(1);
 }
-void serAmarrada(int id, int renas_c){
-    printf("[THREAD Rena %d, id:%d] Amarrando....\n", renas_c, id);
-    sleep(500);
+void serAmarrada(int id){
+    printf("[THREAD Rena: %d] Amarrando...\n", id);
+    sleep(1);
 }
-void pedirAjuda(int id, int elfo_c){
-    printf("[THREAD Elfo %d, id:%d] Pedindo ajuda...\n",elfo_c, id);
-    sleep(500);
+void pedirAjuda(int id){
+    printf("[THREAD Elfo: %d] Pedindo ajuda...\n", id);
+    sleep(1);
 }
 
-void* papaiNoelThread(void *arg){                               /*dados do papai noel*/
-    while (true){                                               /*repita para sempre*/
-        int *threadId = (int *) arg;
+void* papaiNoelThread(void *arg){                               // Thread do papai noel
+    while (true){                                               // Ele executara esta rotina para sempre
+        int *threadId = (int *) arg;                            
 
-        wait(&papaiNoelSem, "Papai noel", "Papai Noel SEM");    /*ele espera até que um elfo ou rena o sinalize)*/
-        wait(&multex, "Papai Noel", "Multex");                  /*entra na região na crítica*/
-        if (renas >= 9){                                        /*se houver nove renas esperando*/
-            prepararTreno(*threadId);                           /*papai noel prepara o trenó*/
-
-            /* No codigo do livro, o signal recebe 9 como
-             * parametro, nao sei pq.
-             * Vou deixar na funcao para fins futuros
-             * */
-            signal(&renaSem, 9, "Papai Noel", "Rena SEM");      /*sinaliza o semáforo das renas nove vezes*/ 
-            renas -= 9;                                         /*as 9 renas são invocadas*/
-        }else if (elfos == 3) ajudarElfos(*threadId), signal(&elfoTex, 1, "Papai Noel", "Elfo TEX"), elfos -=3;     /*se houver 3 elfos esperando, invoca papai noel para ajudar*/
-        signal(&multex, 1, "Papai Noel", "Multex");             /*sinaliza que os 3 elfos foi ajudados e pode entrar mais*/
+        wait(&papaiNoelSem, "Papai noel", "Papai Noel SEM");    // Espera até que um elfo ou rena mande um sinal para ele
+        wait(&multex, "Papai Noel", "Multex");                  // Espera até conseguir acesso à região critica
+                                                                
+        if (renas == 9){                                        // Se tiver nove renas esperando 
+            prepararTreno(*threadId);                           // Papai noel prepara o treno
+            signal(&renaSem, 9, "Papai Noel", "Rena SEM");      // E sinaliza o semaforo das renas nove vezes
+            renas = 0;                                          // E zera o numero de renas esperando 
+        }else if (elfos == 3) {
+                                                                // Se tiver tres elfos esperando
+            ajudarElfos(*threadId);                             // Papai noel irá ajuda-los
+            signal(&elfoSem, 3, "Papai Noel", "Elfo TEX");      // E sinaliza que mais tres elfos podem ser ficar esperando o atendimento
+        }
+        signal(&multex, 1, "Papai Noel", "Multex");             // Por fim libera a região critica para outra thread altera-la
     }
 }
 
-void* renaThread(void *arg){                                    /*dados das renas*/
-    while (true){                                               /*repita para sempre*/
-        int *threadId = (int *) arg;
-        wait(&multex, "Rena", "Multex");                        /*elas esperam até que o papai noel as sinalize para se engatilharem e após entra na região crítica*/
-        renas++;                                                /*incrementam o contador de renas no buffer*/
-        if (renas == 9) signal(&papaiNoelSem, 1, "Rena", "Papai Noel SEM");     /*se a 9º rena estiver pronta, ela sinaliza o papai noel e depois se junta aos outros que esperam*/
-        signal(&multex, 1, "Rena", "Multe");
+void* renaThread(void *arg){                                    // Thread da Rena
+                                                                // Como a rena so vai ser amarrada uma vez, essa thread nao precisa
+                                                                // estar um um loop infinito
 
-        wait(&renaSem, "Rena", "Rena SEM");
-        serAmarrada(*threadId, renas);
-    }
+    int *threadId = (int *) arg;
+
+    wait(&multex, "Rena", "Multex");                            // Espera para conseguir acesso a regiao critica
+    renas++;                                                    // incrementam o buffer de contagem de renas
+    if (renas == 9)                                             // Quando esta for a nona rena
+        signal(&papaiNoelSem, 1, "Rena", "Papai Noel SEM");     // Sinaliza ao papai noel que todas as renas estao prontas para serem amarradas
+    signal(&multex, 1, "Rena", "Multe");                        // Libera o acesso a regiao critica
+
+    wait(&renaSem, "Rena", "Rena SEM");                         // Agora, todas as renas aguardam o sinal para serem amarradas pelo papai noel
+    serAmarrada(*threadId);                                     // Quando liberadas pelo papai noel, estas são amarradas
+
+    return 0;
 }
 
 
-void* elfoThread(void *arg){
-    while (true){
-        int *threadInd = (int *)arg;
+void* elfoThread(void *arg){                                    // Thread da rena
+    while (true){                                               // Repita para sempre
+        int *threadId = (int *)arg;
 
 
-        wait(&elfoTex, "Elfo", "Elfo TEX");
-        wait(&multex, "Elfo", "Multex");
-        elfos++;
-        if (elfos == 3) signal(&papaiNoelSem, 1, "Elfo", "Papai Noel SEM");
-        else signal(&elfoTex, 1, "Elfo", "Elfo TEX");
+        wait(&elfoTex, "Elfo", "Elfo TEX");                     // Espera para conseguir acesso a fila de atendimento do papai noel
+        wait(&multex, "Elfo", "Multex");                        // Espera para conseguir acesso a regia critica
+        elfos++;                                                // incrementa o buffer da fila "elfos"
+        if (elfos == 3)                                         // Se ouver tres elfos na fila
+            signal(&papaiNoelSem, 1, "Elfo", "Papai Noel SEM"); // É sinalizado ao papai noel que ele precisa atender os elfos
+                                                                // e a fila de espera trava ate que estes sejam atendidos pela thread
+                                                                // do papai noel
+        else 
+            signal(&elfoTex, 1, "Elfo", "Elfo TEX");            // Libera o acesso a fila para que mais um elfo possa entrar
 
-        signal(&multex, 1, "Elfo", "Multex");
+        signal(&multex, 1, "Elfo", "Multex");                   // Libera o acesso a regiao critica
 
-        pedirAjuda(*threadInd, elfos);
+        wait(&elfoSem, "Elfo", "Elfo SEM");                     // Apenas o elfos que estiverem na fila poderam esperar pelo o atendimento do papai noel
+        pedirAjuda(*threadId);                                  // Procedimento de pedir ajuda
 
-        wait(&multex, "Elfo", "Multex");
+        wait(&multex, "Elfo", "Multex");                        // Pede acesso a regiao critica mais uma vez para liberar o seu espaco no buffer de fila "elfos"
         elfos--;
-        if (elfos == 0) signal(&elfoTex, 1, "Elfo", "Elfo TEX");
-        signal(&multex, 1, "Elfo", "Multex");
+        if (elfos == 0)                                         // Quando nao tiver mais nenhum elfo na fila 
+            signal(&elfoTex, 1, "Elfo", "Elfo TEX");            // O ultimo elfo sinaliza que mais elfos podem entrar
+        signal(&multex, 1, "Elfo", "Multex");                   // Libera o acesso a regia critica
+
     }
 }
 
 
 // Declaração de algumas constantes e apelidos
 
-#define NELFOS 10
+#define NELFOS 20
 #define NRENAS 9
 
 typedef pthread_t pthread;
+
+
+pthread papaiNoel;
+pthread elfo[NELFOS];
+pthread rena[NRENAS];
 
 int main(){
 
@@ -118,17 +136,12 @@ int main(){
      * Compilação com linkers
      * gcc papainoel.c -lpthread -lrt -D_REENTRANT -lpthread -o teste; ./teste
      *
-     *
-     *
      * */
 
-    pthread papaiNoel;
-    pthread elfo[NELFOS];
-    pthread rena[NRENAS];
-
     puts("Inicializando semaforos");
-    sem_init(&papaiNoelSem, 0, 1);
-    sem_init(&renaSem, 0, 1);
+    sem_init(&papaiNoelSem, 0, 0);
+    sem_init(&renaSem, 0, 0);
+    sem_init(&elfoSem, 0, 0);
     sem_init(&elfoTex, 0, 1);
     sem_init(&multex, 0, 1);
 
@@ -150,6 +163,7 @@ int main(){
 
     sem_destroy(&papaiNoelSem);
     sem_destroy(&renaSem);
+    sem_destroy(&elfoSem);
     sem_destroy(&elfoTex);
     sem_destroy(&multex);
 
