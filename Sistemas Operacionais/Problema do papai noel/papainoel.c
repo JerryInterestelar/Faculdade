@@ -1,23 +1,31 @@
-#include <stdio.h>
-#include <pthread.h>
-#include <semaphore.h>
-#include <unistd.h>
+// Problema do Papai noel 
+// Desenvolvido por Jerry de Sousa, Janaina Sousa, Maria Michelle
 
-#define true 1
+
+#include <stdio.h>              // Biblioteca de saida padrao
+#include <pthread.h>            // Biblioteca de threads 
+#include <semaphore.h>          // Biblioteca de semaforos
+#include <unistd.h>             // Biblioteca da funcao sleep
+
+// Algumas constates de conveniencia
+#define true 1                  
 #define false 0
+#define NELFOS 20
+#define NRENAS 9
 
+typedef pthread_t pthread;
 typedef sem_t sem;
 
-int elfos = 0;                  /* Numero de itens no Buffer*/
-int renas = 0;
+int elfos = 0;                  /* Numero de itens no Buffer de elfos*/
+int renas = 0;                  /* Numero de itens no Buffer de renas*/
 
 sem papaiNoelSem;
 
-sem renaSem;                    /* Semaforos reservados para a relacao papai noel e rena/elfo*/
-sem elfoSem;
+sem renaSem;                    /* Semaforo reservados para a relacao papai noel e rena*/
+sem elfoSem;                    /* Semaforo reservados para a relacao papai noel e elfo*/
 
-sem elfoTex;
-sem multex;
+sem elfoTex;                    // Multex da fila de elfos 
+sem multex;                     // Multex de regiao critica
 
 
 // Renomeação das funçoes de controle de semaforo de "Semaphore"
@@ -30,20 +38,20 @@ int signal(sem *semaforo, int vezes){
 }
 
 // Funcoes de execução para fins de LOG (estas levam um segundo para serem executadas)
-void prepararTreno(int id){
-    printf("[THREAD Papai Noel %d] Preparando treno.....\n", id);
+void prepararTreno(unsigned long int id){
+    fprintf(stderr, "[THREAD Papai Noel %lu] Preparando treno.....\n", id);
     sleep(1);
 }
-void ajudarElfos(int id){
-    printf("[THREAD Papai Noel %d] Ajudando elfos.....\n", id);
+void ajudarElfos(unsigned long int id){
+    fprintf(stderr, "[THREAD Papai Noel %lu] Ajudando elfos.....\n", id);
     sleep(1);
 }
-void serAmarrada(int id){
-    printf("[THREAD Rena: %d] Amarrando...\n", id);
+void serAmarrada(unsigned long int id){
+    fprintf(stderr, "[THREAD Rena: %lu] Amarrando...\n", id);
     sleep(1);
 }
-void pedirAjuda(int id){
-    printf("[THREAD Elfo: %d] Pedindo ajuda...\n", id);
+void pedirAjuda(unsigned long int id){
+    fprintf(stderr, "[THREAD Elfo: %lu] Pedindo ajuda...\n", id);
     sleep(1);
 }
 
@@ -116,18 +124,6 @@ void* elfoThread(void *arg){                    // Thread da rena
 }
 
 
-// Declaração de algumas constantes e apelidos
-
-#define NELFOS 20
-#define NRENAS 9
-
-typedef pthread_t pthread;
-
-
-pthread papaiNoel;
-pthread elfo[NELFOS];
-pthread rena[NRENAS];
-
 int main(){
 
     /*
@@ -136,29 +132,33 @@ int main(){
      *
      * */
 
+    pthread papaiNoel;            // Alocaçao das threads
+    pthread elfo[NELFOS];
+    pthread rena[NRENAS];
+
+
     puts("Inicializando semaforos");
-    sem_init(&papaiNoelSem, 0, 0);
+    sem_init(&papaiNoelSem, 0, 0);    //Inicialização dos semaforos com seus respectivos valores
     sem_init(&renaSem, 0, 0);
     sem_init(&elfoSem, 0, 0);
     sem_init(&elfoTex, 0, 1);
     sem_init(&multex, 0, 1);
 
-
     puts("Criando as Threads");
     puts("Em execução....");
 
+    // Criamos as Threads
     pthread_create(&papaiNoel, NULL, papaiNoelThread, (void *)&papaiNoel);
     for (int i = 0; i < NELFOS; i++) pthread_create(&elfo[i], NULL, elfoThread, (void *)&elfo[i]);
 
     for (int i = 0; i < NRENAS; i++) pthread_create(&rena[i], NULL, renaThread, (void *)&rena[i]);
-
-
     pthread_join(papaiNoel, NULL);
     for (int i = 0; i < NELFOS; i++) pthread_join(elfo[i], NULL);
 
     for (int i = 0; i < NRENAS; i++) pthread_join(rena[i], NULL);
     
 
+    //Por fim limpamos o espaço ocupado pelas threads
     sem_destroy(&papaiNoelSem);
     sem_destroy(&renaSem);
     sem_destroy(&elfoSem);
